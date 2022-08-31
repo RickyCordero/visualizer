@@ -1,0 +1,109 @@
+version: '3.0'
+
+services:
+    # TODO: Services for kafka and zookeeper
+    # (https://github.com/bitnami/bitnami-docker-kafka/blob/master/docker-compose-cluster.yml)
+    # (https://engineering.bitnami.com/articles/create-a-pub-sub-messaging-cluster-with-bitnami-s-kafka-and-zookeeper-containers.html)
+  zookeeper:
+    image: bitnami/zookeeper:3.6.2
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  # db:
+  #   image: mysql:latest
+  #   command: --default-authentication-plugin=mysql_native_password
+  #   ports:
+  #     - '3306:3306'
+  #   restart: always
+  #   volumes:
+  #     - mysql_db_volume:/var/lib/mysql
+  #   env_file:
+  #     - ./.env
+  kafka:
+    image: bitnami/kafka:2.7.0
+    ports:
+      - "9092:9092" # exposed to host machine
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      # a comma-separated list of listeners
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,PLAINTEXT_HOST://:29092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+    depends_on:
+      - zookeeper
+  # producer:
+  #   image: 440132479995.dkr.ecr.us-east-2.amazonaws.com/tweet-map/producer:1.0.0
+  #   build:
+  #     context: ./producer
+  #     dockerfile: ./Dockerfile.producer
+  #   command: pipenv run python manage.py producer
+  #   volumes:
+  #     - ./producer/:/home/producer # this is for fast development server testing (remove in production)
+  #     - ./tweetmap/tweetstream:/home/producer/tweetstream # get access to django models from web
+  #   env_file:
+  #     - ./.env
+  #   restart: on-failure
+  #   # deploy:
+  #   #   restart_policy:
+  #   #     condition: on-failure
+
+  #   depends_on:
+  #     - kafka
+  #     - db
+  # consumer:
+  #   build:
+  #     context: ./consumer
+  #     dockerfile: Dockerfile.consumer
+  #   command: pipenv run python consumer.py
+  #   volumes:
+  #     - ./consumer/:/home/consumer
+  #   env_file:
+  #     - ./.env
+  #   depends_on:
+  #     - producer
+
+  # redis:
+  #   restart: always
+  #   image: bitnami/redis:5.0.12
+  #   ports:
+  #     - "6379:6379"
+  #   environment:
+  #     - ALLOW_EMPTY_PASSWORD=yes
+  #   volumes:
+  #     # - /path/to/your_redis.conf:/opt/bitnami/redis/mounted-etc/redis.conf
+  #     - redis_volume:/bitnami/redis/data
+  #     # NOTE: As this is a non-root container, the mounted files and directories must have the proper permissions for the UID 1001.
+
+  # web:
+  #   image: 440132479995.dkr.ecr.us-east-2.amazonaws.com/tweet-map/web:1.0.0
+  #   build:
+  #     context: ./tweetmap
+  #     dockerfile: Dockerfile.web.dev
+  #   # command: pipenv run python manage.py runserver 0.0.0.0:9021
+  #   # command: pipenv run gunicorn --workers 16 --bind 0.0.0.0:9021 tweetmap.wsgi
+  #   # command: pipenv run gunicorn --worker-class gevent --bind 0.0.0.0:9021 tweetmap.wsgi
+  #   # https://medium.com/building-the-system/gunicorn-3-means-of-concurrency-efbb547674b7
+  #   command: pipenv run gunicorn --reload --worker-class=gevent --worker-connections=1000 --workers=3 --bind 0.0.0.0:9021 --log-level debug --enable-stdio-inheritance tweetmap.wsgi
+  #   volumes:
+  #     - ./tweetmap/:/home/tweetmap # this is for fast development server testing (remove in production)
+  #     - static_volume:/home/tweetmap/staticfiles # This creates a named volume and dumps the RHS into a named-volume for static files
+  #   ports:
+  #     - "9021:9021" # exposed to host machine
+  #   env_file:
+  #     - ./.env
+  # nginx:
+  #   # image: 440132479995.dkr.ecr.us-east-2.amazonaws.com/tweet-map/nginx:1.0.0
+  #   build:
+  #     context: ./nginx
+  #     dockerfile: Dockerfile.dev.nginx
+  #   ports:
+  #     - "80:80" # bind nginx port 80 on the LHS (arbitrary) to 80 RHS (defined in nginx.conf), access the app at localhost:80
+  #   volumes:
+  #     - ./tweetmap/:/home/tweetmap # this is for fast development server testing (remove in production)
+  #     - static_volume:/home/tweetmap/staticfiles # LHS is name of volume created by web image above, RHS is accessible in the nginx container
+  #   # depends_on:
+  #   #   - web
+  #   #   - social
