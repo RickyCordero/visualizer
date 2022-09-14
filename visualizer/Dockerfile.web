@@ -1,0 +1,16 @@
+# pull official base image
+FROM python:3.8-slim-buster
+
+# set workdir
+WORKDIR /home/visualizer
+
+# update and install pipenv
+RUN apt update --allow-releaseinfo-change && apt install -y pipenv && apt install -y htop && apt install -y vim 2>/dev/null
+
+# copy project and install python packages
+COPY Pipfile ./Pipfile
+RUN pipenv install
+COPY . .
+
+# collect the static files
+# RUN pipenv run python manage.py collecstatic --no-input
