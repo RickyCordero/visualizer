@@ -15,7 +15,6 @@
         integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
 
     <style>
-        
         body {
             font-family: 'Orbitron', sans-serif;
             height: 100%;
@@ -90,6 +89,60 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
         crossorigin="anonymous"></script>
+    <!-- AccurateInterval -->
+    <script>
+        // (function() {
+        //     window.accurateInterval = function(time, fn) {
+        //         var cancel, nextAt, timeout, wrapper, _ref;
+        //         nextAt = new Date().getTime() + time;
+        //         timeout = null;
+        //         if (typeof time === 'function') _ref = [time, fn], fn = _ref[0], time = _ref[1];
+        //         wrapper = function() {
+        //             nextAt += time;
+        //             timeout = setTimeout(wrapper, nextAt - new Date().getTime());
+        //             return fn();
+        //         };
+        //         cancel = function() {
+        //             return clearTimeout(timeout);
+        //         };
+        //         timeout = setTimeout(wrapper, nextAt - new Date().getTime());
+        //         return {
+        //             cancel: cancel
+        //         };
+        //     };
+        // }).call(this);
+    </script>
+    <script>
+        function interval(fn, duration) {
+            var _this = this
+            _this.baseline = undefined
+
+            _this.run = function () {
+                if (_this.baseline === undefined) {
+                    _this.baseline = new Date().getTime()
+                }
+                fn()
+                _this.end = new Date().getTime()
+                _this.baseline += duration
+
+                _this.nextTick = duration - (_this.end - _this.baseline)
+                if (_this.nextTick < 0) {
+                    _this.nextTick = 0
+                }
+
+                if (_this.run !== undefined) {
+                    _this.timer = setTimeout(function () {
+                        _this.run()
+                    }, _this.nextTick)
+                }
+            }
+
+            _this.stop = function () {
+                clearTimeout(_this.timer);
+                _this.run = undefined;
+            }
+        }
+    </script>
     <!-- Visualizer -->
     <script>
         console.log("Starting visualizer...");
@@ -97,8 +150,10 @@
         const LINK_URL = `{% url "api-link-view" %}`;
         const LINK_SOURCE = new EventSource(LINK_URL);
         let bpm = 0;
-        let interval;
-        let timeout;
+        // let interval;
+        // let timeout;
+        let timer;
+        let should_strobe = true;
         LINK_SOURCE.onopen = () => {
             console.log("Link source connected");
         }
@@ -108,21 +163,37 @@
                 bpm = new_bpm;
                 document.getElementById("bpm").innerHTML = `${round(new_bpm)} bpm`;
                 console.log(`Changed bpm to ${bpm}`);
-                ms_per_beat = (60 / new_bpm) * 1000;
+                // ms_per_beat = (60 / new_bpm) * 1000;
+                ms_per_beat = (60 / new_bpm) * 1000 / 2;
                 console.log(`Milliseconds per beat: ${ms_per_beat}`);
-                if (interval) {
-                    clearInterval(interval);
-                    clearTimeout(timeout);
+                // if (interval) {
+                //     clearInterval(interval);
+                //     clearTimeout(timeout);
+                // }
+                // interval = setInterval(strobe, ms_per_beat);
+                if (timer) {
+                    timer.stop();
+                    timer = undefined;
+                    // clearTimeout(timeout);
                 }
-                interval = setInterval(strobe, ms_per_beat);
+                // interval = setInterval(strobe, ms_per_beat);
+                // timer = accurateInterval(strobe, ms_per_beat);
+                timer = new interval(strobe, ms_per_beat);
+                timer.run();
             }
         }
         function strobe() {
             console.log((new Date()).getSeconds());
-            document.body.style.opacity = "0%";
-            timeout = setTimeout(() => {
+            if (should_strobe) {
+                document.body.style.opacity = "0%";
+                should_strobe = false;
+            } else {
+                should_strobe = true;
                 document.body.style.opacity = "100%";
-            }, 500);
+            }
+            // timeout = setTimeout(() => {
+            //     document.body.style.opacity = "100%";
+            // }, 500);
         }
         function round(num) {
             return Math.round((num + Number.EPSILON) * 100) / 100
