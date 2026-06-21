@@ -23,6 +23,7 @@ On windows, start the Carabiner binary then start the docker project.
 
 * [Ableton Link](https://www.ableton.com/en/link/) - In-time network based BPM sync protocol
 * [Django](https://www.djangoproject.com/) - Web application framework
-* [Kafka](https://kafka.apache.org/) - Distributed event streaming
+* [ZeroMQ](https://zeromq.org/) - High-performance asynchronous messaging library
 * [SSE](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events) - Real-time event-based communication to browser
+* [uv](https://github.com/astral-sh/uv) - Fast Python package installer and resolver
 

@@ -6,64 +6,74 @@ This document provides rules and guidelines for AI agents operating within this 
 
 This repository contains a real-time visualization system consisting of:
 - **Visualizer**: A Django web application (`/visualizer`) that consumes dynamic BPM streams and serves a web frontend.
-- **Producer**: A Python script (`/producer`) utilizing `kafka-python` and Ableton Link (via `LinkToPy`) to produce BPM streams.
+- **Producer**: A Python script (`/producer`) utilizing `pyzmq` (ZeroMQ) and Ableton Link (via `LinkToPy`) to produce BPM streams.
 - **Docker**: Containerized environments for both components, orchestrated via `docker-compose.dev.yml`.
 
 ### Key Technologies
-- **Python 3.8+**
-- **Django 3.2.x** (Web Framework)
-- **Apache Kafka** (Event Streaming)
-- **Pipenv** (Dependency Management)
+- **Python 3.14.6**
+- **Django 6.0.x** (Web Framework)
+- **ZeroMQ (ZMQ)** (Asynchronous Messaging)
+- **uv** (Package & Environment Management)
 - **Server-Sent Events (SSE)** (Real-time updates)
 
 ---
 
 ## 2. Build, Lint, and Test Commands
 
-Since this project utilizes Pipenv for dependency management, all commands must be executed within the virtual environment or prefixed with `pipenv run`.
+Since this project utilizes `uv` for dependency and virtual environment management, all commands should be run using the symlinked virtual environments or `uv run`.
 
 ### Setup and Dependencies
-- **Install dependencies (Visualizer)**: `cd visualizer && pipenv install --dev`
-- **Install dependencies (Producer)**: `cd producer && pipenv install --dev`
+- **Note for WSL/NTFS mounts**: Recreate virtual environments on the native ext4 filesystem (e.g. `/home/ricky/.venv/`) and symlink them into the project directories to avoid file-locking and permission issues.
+- **Install dependencies (Visualizer)**:
+  ```bash
+  cd visualizer && uv pip install -r requirements.txt --link-mode=copy
+  ```
+- **Install dependencies (Producer)**:
+  ```bash
+  cd producer && uv pip install -r requirements.txt --link-mode=copy
+  ```
 
 ### Testing
-There are currently no explicitly defined test suites, but for standard Django and Python development, use the following:
 - **Run all Visualizer tests**:
   ```bash
-  cd visualizer && pipenv run python manage.py test
+  cd visualizer && .venv/bin/python manage.py test
   ```
 - **Run a single Visualizer test class**:
   ```bash
-  cd visualizer && pipenv run python manage.py test app_name.tests.TestClass
+  cd visualizer && .venv/bin/python manage.py test app_name.tests.TestClass
   ```
 - **Run a specific Visualizer test method**:
   ```bash
-  cd visualizer && pipenv run python manage.py test app_name.tests.TestClass.test_method
+  cd visualizer && .venv/bin/python manage.py test app_name.tests.TestClass.test_method
+  ```
+- **Run Producer tests**:
+  ```bash
+  cd producer && .venv/bin/python test_producer.py
   ```
 
 ### Linting & Formatting
-To maintain PEP8 compliance, agents should adhere to standard Python linting tools. (Ensure these tools are installed if you intend to run them, or suggest adding them to `[dev-packages]`).
+To maintain PEP8 compliance, agents should adhere to standard Python linting tools.
 - **Format code with Black**:
   ```bash
-  pipenv run black .
+  uv run black .
   ```
 - **Sort imports with isort**:
   ```bash
-  pipenv run isort .
+  uv run isort .
   ```
 - **Lint code with Flake8**:
   ```bash
-  pipenv run flake8 .
+  uv run flake8 .
   ```
 
 ### Running the Application (Build & Run)
-- **Start the entire stack (Kafka, Zookeeper, Nginx, Django, Producer)**:
+- **Start the entire stack (Nginx, Django, Producer, ZMQ)**:
   ```bash
   docker-compose -f docker-compose.dev.yml up --build
   ```
 - **Run the Django server locally (without Docker)**:
   ```bash
-  cd visualizer && pipenv run python manage.py runserver 0.0.0.0:8000
+  cd visualizer && .venv/bin/python manage.py runserver 0.0.0.0:8000
   ```
 
 ---
@@ -82,7 +92,7 @@ All agents modifying code in this project must strictly adhere to the following 
 ### Imports
 - Group imports into three sections, separated by a blank line:
   1. Standard library imports (e.g., `import os`, `import sys`).
-  2. Related third-party imports (e.g., `import django`, `import kafka`).
+  2. Related third-party imports (e.g., `import django`, `import zmq`).
   3. Local application/library specific imports.
 - Use absolute imports over relative imports wherever possible.
 - Avoid wildcard imports (`from module import *`).
@@ -91,7 +101,7 @@ All agents modifying code in this project must strictly adhere to the following 
 - **Classes**: `PascalCase` (e.g., `BpmConsumer`, `VisualizerConfig`).
 - **Functions & Methods**: `snake_case` (e.g., `start_stream()`, `process_message()`).
 - **Variables**: `snake_case` (e.g., `current_bpm`, `message_payload`).
-- **Constants**: `UPPER_SNAKE_CASE` (e.g., `KAFKA_BROKER_URL`, `MAX_RETRIES`).
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `ZMQ_PUB_URL`, `MAX_RETRIES`).
 - **Private Variables/Methods**: Prefix with a single underscore (e.g., `_internal_state`, `_parse_data()`).
 
 ### Typing
@@ -99,7 +109,7 @@ All agents modifying code in this project must strictly adhere to the following 
 - Example: `def process_bpm(bpm: int, source: str) -> bool:`
 
 ### Error Handling
-- Use specific exception classes (e.g., `KeyError`, `kafka.errors.KafkaError`) rather than catching broad `Exception` where possible.
+- Use specific exception classes (e.g., `KeyError`, `zmq.error.ZMQError`) rather than catching broad `Exception` where possible.
 - Include a descriptive error message when raising or logging exceptions.
 - **Do not** use silent `try-except-pass` blocks without a comment explaining why the error is ignored.
 - Use Python's built-in `logging` module rather than `print()` statements for production or long-running code (like the producer or Django views).
@@ -109,9 +119,10 @@ All agents modifying code in this project must strictly adhere to the following 
 - **Views**: Prefer Class-Based Views (CBVs) for standard CRUD operations, but function-based views are acceptable for simple or highly custom endpoints (like SSE streams).
 - **Migrations**: Always generate and apply migrations when modifying models (`python manage.py makemigrations` and `python manage.py migrate`). Do not check in broken or conflicting migrations.
 
-### Kafka Specific Guidelines
+### ZeroMQ Specific Guidelines
 - Ensure proper configuration for serializers/deserializers (e.g., UTF-8 string encoding or JSON serialization).
 - Handle connection failures gracefully with retry mechanisms or clear logging.
+- Ensure ZeroMQ asynchronous sockets (e.g., `zmq.asyncio` context/sockets) are properly managed to avoid blocking the event loop under ASGI/Uvicorn.
 
 ---
 
