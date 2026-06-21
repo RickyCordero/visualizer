@@ -26,11 +26,11 @@ Since this project utilizes `uv` for dependency and virtual environment manageme
 - **Note for WSL/NTFS mounts**: Recreate virtual environments on the native ext4 filesystem (e.g. `/home/ricky/.venv/`) and symlink them into the project directories to avoid file-locking and permission issues.
 - **Install dependencies (Visualizer)**:
   ```bash
-  cd visualizer && uv pip install -r requirements.txt --link-mode=copy
+  cd visualizer && uv sync
   ```
 - **Install dependencies (Producer)**:
   ```bash
-  cd producer && uv pip install -r requirements.txt --link-mode=copy
+  cd producer && uv sync
   ```
 
 ### Testing
