@@ -1,15 +1,20 @@
 # pull official base image
-FROM python:3.8-slim-buster
+FROM python:3.14-slim-bookworm
 
 # set workdir
 WORKDIR /home/producer
 
-# update and install pipenv
-RUN apt update --allow-releaseinfo-change && apt install -y pipenv && apt install -y htop && apt install -y vim 2>/dev/null
+# Install htop and vim for debugging
+RUN apt update --allow-releaseinfo-change && apt install -y htop && apt install -y vim 2>/dev/null
 
-# copy project and install python packages
-COPY Pipfile ./Pipfile
-RUN pipenv install
+# Install uv using the official binary
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copy requirements and install directly to system packages in the container
+COPY requirements.txt ./
+RUN uv pip install --system -r requirements.txt
+
 COPY . .
 
-COPY LinkToPy.py /root/.virtualenvs/producer-V67IOLBK/lib/python3.8/site-packages/LinkToPy/LinkToPy.py
+# Overwrite PyPI's installed LinkToPy package with our local modified copy
+COPY LinkToPy.py /usr/local/lib/python3.14/site-packages/LinkToPy/LinkToPy.py

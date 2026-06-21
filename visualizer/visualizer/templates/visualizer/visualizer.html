@@ -114,90 +114,76 @@
         // }).call(this);
     </script>
     <script>
-        function interval(fn, duration) {
-            var _this = this
-            _this.baseline = undefined
+        // State object to keep track of the most recent Ableton Link synchronization coordinates
+        let syncState = null;
 
-            _this.run = function () {
-                if (_this.baseline === undefined) {
-                    _this.baseline = new Date().getTime()
-                }
-                fn()
-                _this.end = new Date().getTime()
-                _this.baseline += duration
-
-                _this.nextTick = duration - (_this.end - _this.baseline)
-                if (_this.nextTick < 0) {
-                    _this.nextTick = 0
-                }
-
-                if (_this.run !== undefined) {
-                    _this.timer = setTimeout(function () {
-                        _this.run()
-                    }, _this.nextTick)
-                }
-            }
-
-            _this.stop = function () {
-                clearTimeout(_this.timer);
-                _this.run = undefined;
-            }
-        }
-    </script>
-    <!-- Visualizer -->
-    <script>
-        console.log("Starting visualizer...");
-        // document.body.style.background = "06002a";
+        // Establish the EventSource stream connection to Django
         const LINK_URL = `{% url "api-link-view" %}`;
         const LINK_SOURCE = new EventSource(LINK_URL);
-        let bpm = 0;
-        // let interval;
-        // let timeout;
-        let timer;
-        let should_strobe = true;
+
         LINK_SOURCE.onopen = () => {
-            console.log("Link source connected");
-        }
+            console.log("Ableton Link stream source connected.");
+        };
+
         LINK_SOURCE.onmessage = (e) => {
-            let new_bpm = parseFloat(e.data);
-            if (bpm < new_bpm || new_bpm < bpm) {
-                bpm = new_bpm;
-                document.getElementById("bpm").innerHTML = `${round(new_bpm)} bpm`;
-                console.log(`Changed bpm to ${bpm}`);
-                // ms_per_beat = (60 / new_bpm) * 1000;
-                ms_per_beat = (60 / new_bpm) * 1000 / 2;
-                console.log(`Milliseconds per beat: ${ms_per_beat}`);
-                // if (interval) {
-                //     clearInterval(interval);
-                //     clearTimeout(timeout);
-                // }
-                // interval = setInterval(strobe, ms_per_beat);
-                if (timer) {
-                    timer.stop();
-                    timer = undefined;
-                    // clearTimeout(timeout);
+            try {
+                const data = JSON.parse(e.data);
+                
+                // Keep track of:
+                // 1. The current BPM (tempo)
+                // 2. The exact beat counter at the time of publication
+                // 3. The server timestamp when the beat position was measured
+                // 4. The local time we received the packet, to calculate elapsed time
+                syncState = {
+                    bpm: parseFloat(data.bpm),
+                    beat: parseFloat(data.beat),
+                    timestamp: parseFloat(data.timestamp),
+                    receivedAt: Date.now() / 1000.0
+                };
+                
+                document.getElementById("bpm").innerHTML = `${round(syncState.bpm)} bpm`;
+            } catch (err) {
+                // Fallback for raw float BPM if legacy messages are encountered
+                const new_bpm = parseFloat(e.data);
+                if (!isNaN(new_bpm)) {
+                    syncState = {
+                        bpm: new_bpm,
+                        beat: 0,
+                        timestamp: Date.now() / 1000.0,
+                        receivedAt: Date.now() / 1000.0
+                    };
+                    document.getElementById("bpm").innerHTML = `${round(new_bpm)} bpm`;
                 }
-                // interval = setInterval(strobe, ms_per_beat);
-                // timer = accurateInterval(strobe, ms_per_beat);
-                timer = new interval(strobe, ms_per_beat);
-                timer.run();
             }
-        }
-        function strobe() {
-            console.log((new Date()).getSeconds());
-            if (should_strobe) {
-                document.body.style.opacity = "0%";
-                should_strobe = false;
-            } else {
-                should_strobe = true;
-                document.body.style.opacity = "100%";
+        };
+
+        // Precision sync loop running on the browser's display refresh rate (e.g. 60Hz/120Hz/144Hz)
+        function renderLoop() {
+            if (syncState) {
+                const now = Date.now() / 1000.0;
+                
+                // Extrapolate the exact elapsed time since the sync event was captured
+                const elapsed = now - syncState.receivedAt;
+                
+                // Extrapolate current fractional beat count: beats = beat_start + (bps * elapsed)
+                const beatsPerSecond = syncState.bpm / 60.0;
+                const currentBeat = syncState.beat + (beatsPerSecond * elapsed);
+                
+                // Alternate background opacity every half-beat (strobe)
+                // Floor the beat * 2 to check if it's an odd or even half-beat.
+                // This is stateless and self-corrects instantly even if frames drop or jitter occurs.
+                const isHalfBeatOdd = Math.floor(currentBeat * 2) % 2 === 1;
+                document.body.style.opacity = isHalfBeatOdd ? "0%" : "100%";
             }
-            // timeout = setTimeout(() => {
-            //     document.body.style.opacity = "100%";
-            // }, 500);
+            
+            requestAnimationFrame(renderLoop);
         }
+
+        // Start the animation loop
+        requestAnimationFrame(renderLoop);
+
         function round(num) {
-            return Math.round((num + Number.EPSILON) * 100) / 100
+            return Math.round((num + Number.EPSILON) * 100) / 100;
         }
     </script>
 </body>

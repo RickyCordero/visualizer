@@ -1,1 +1,14 @@
-./producer/car_logs.log
+# Log files
+*.log
+producer/car_logs.log
+
+# Virtual environments
+.venv
+.venv/
+.venv_old
+.venv_old/
+/home/ricky/.venv/
+
+# Python cache files
+__pycache__/
+*.pyc

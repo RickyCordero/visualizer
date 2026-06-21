@@ -1,56 +1,21 @@
 version: '3.0'
 
 services:
-    # TODO: Services for kafka and zookeeper
-    # (https://github.com/bitnami/bitnami-docker-kafka/blob/master/docker-compose-cluster.yml)
-    # (https://engineering.bitnami.com/articles/create-a-pub-sub-messaging-cluster-with-bitnami-s-kafka-and-zookeeper-containers.html)
-  zookeeper:
-    image: bitnami/zookeeper:3.6.2
-    ports:
-      - "2181:2181"
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-  # db:
-  #   image: mysql:latest
-  #   command: --default-authentication-plugin=mysql_native_password
-  #   ports:
-  #     - '3306:3306'
-  #   restart: always
-  #   volumes:
-  #     - mysql_db_volume:/var/lib/mysql
-  #   env_file:
-  #     - ./.env
-  kafka:
-    image: bitnami/kafka:2.7.0
-    ports:
-      - "9092:9092" # exposed to host machine
-    environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      # a comma-separated list of listeners
-      - KAFKA_LISTENERS=PLAINTEXT://:9092,PLAINTEXT_HOST://:29092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-    depends_on:
-      - zookeeper
   producer:
     image: visualizer/producer:1.0.0
     build:
       context: ./producer
       dockerfile: ./Dockerfile.producer
-    command: pipenv run python producer.py
+    command: python producer.py
     volumes:
       - ./producer/:/home/producer # this is for fast development server testing (remove in production)
-    # env_file:
-    #   - ./.env
+    ports:
+      - "5555:5555"
     restart: on-failure
     # deploy:
     #   restart_policy:
     #     condition: on-failure
 
-    depends_on:
-      - kafka
     # network_mode: "host"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -87,8 +52,7 @@ services:
     # command: pipenv run python manage.py runserver 0.0.0.0:9021
     # command: pipenv run gunicorn --workers 16 --bind 0.0.0.0:9021 tweetmap.wsgi
     # command: pipenv run gunicorn --worker-class gevent --bind 0.0.0.0:9021 tweetmap.wsgi
-    # https://medium.com/building-the-system/gunicorn-3-means-of-concurrency-efbb547674b7
-    command: pipenv run gunicorn --reload --worker-class=gevent --worker-connections=1000 --workers=3 --bind 0.0.0.0:9021 --log-level debug --enable-stdio-inheritance vj.wsgi
+    command: uvicorn vj.asgi:application --host 0.0.0.0 --port 9021 --reload --log-level debug
     # command: pipenv run python manage.py runserver 0:9021
     volumes:
       - ./visualizer/:/home/visualizer # this is for fast development server testing (remove in production)
