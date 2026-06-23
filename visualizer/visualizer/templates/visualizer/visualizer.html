@@ -180,25 +180,32 @@
             }
         };
 
+        let smoothBeat = null;
+        let lastFrameTime = null;
+
         // Precision sync loop running on the browser's display refresh rate (e.g. 60Hz/120Hz/144Hz)
         function renderLoop() {
+            const now = Date.now() / 1000.0;
+
             if (syncState) {
-                const now = Date.now() / 1000.0;
-                
-                // Extrapolate the exact elapsed time since the sync event was captured
-                const elapsed = now - syncState.timestamp;
-                
-                // Extrapolate current fractional beat count: beats = beat_start + (bps * elapsed)
-                const beatsPerSecond = syncState.bpm / 60.0;
-                const currentBeat = syncState.beat + (beatsPerSecond * elapsed);
-                
+                const bps = syncState.bpm / 60.0;
+                const targetBeat = syncState.beat + bps * (now - syncState.timestamp);
+
+                if (smoothBeat === null) {
+                    smoothBeat = targetBeat;
+                } else {
+                    const dt = now - lastFrameTime;
+                    smoothBeat += bps * dt;
+                    // Gently nudge towards the target beat to eliminate state-resync jitter
+                    smoothBeat += (targetBeat - smoothBeat) * 0.08;
+                }
+
                 // Alternate background opacity every half-beat (strobe)
-                // Floor the beat * 2 to check if it's an odd or even half-beat.
-                // This is stateless and self-corrects instantly even if frames drop or jitter occurs.
-                const isHalfBeatOdd = Math.floor(currentBeat * 2) % 2 === 1;
+                const isHalfBeatOdd = Math.floor(smoothBeat * 2) % 2 === 1;
                 document.body.style.opacity = isHalfBeatOdd ? "0%" : "100%";
             }
-            
+
+            lastFrameTime = now;
             requestAnimationFrame(renderLoop);
         }
 

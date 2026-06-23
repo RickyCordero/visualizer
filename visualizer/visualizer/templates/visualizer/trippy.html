@@ -255,6 +255,8 @@
         const particles = [];
         let rotationAngle = 0;
         let lastBeatIndex = -1;
+        let smoothBeat = null;
+        let lastFrameTime = null;
 
         // Visualizer Loop
         function render() {
@@ -267,15 +269,23 @@
             ctx.fillStyle = "rgba(3, 0, 8, 0.08)";
             ctx.fillRect(0, 0, width, height);
 
+            const now = Date.now() / 1000.0;
+
             if (syncState) {
-                const now = Date.now() / 1000.0;
-                const elapsed = now - syncState.timestamp;
-                
-                // Extrapolate exact current beat position
                 const bps = syncState.bpm / 60.0;
-                const currentBeat = syncState.beat + (bps * elapsed);
-                const beatProgress = currentBeat % 1.0;
-                const beatIndex = Math.floor(currentBeat);
+                const targetBeat = syncState.beat + bps * (now - syncState.timestamp);
+
+                if (smoothBeat === null) {
+                    smoothBeat = targetBeat;
+                } else {
+                    const dt = now - lastFrameTime;
+                    smoothBeat += bps * dt;
+                    // Nudge towards target beat to erase resync jitter
+                    smoothBeat += (targetBeat - smoothBeat) * 0.08;
+                }
+
+                const beatProgress = smoothBeat % 1.0;
+                const beatIndex = Math.floor(smoothBeat);
 
                 // Sharp exponential decay impact curve on every beat (value range 1.0 -> 0.0)
                 const beatImpact = Math.pow(1 - beatProgress, 4);
@@ -313,7 +323,7 @@
 
                 // Render trippy geometric kaleidoscope/mandala
                 const maxRings = 4;
-                const baseHue = (currentBeat * 15) % 360;
+                const baseHue = (smoothBeat * 15) % 360;
 
                 ctx.save();
                 ctx.translate(centerX, centerY);
@@ -334,7 +344,7 @@
                         const theta = (i / numPoints) * Math.PI * 2;
                         
                         // Generative spirograph coordinates: modulate radius with sine wave
-                        const modulation = Math.sin(theta * 5 + (currentBeat * Math.PI * 2)) * 15 * beatProgress;
+                        const modulation = Math.sin(theta * 5 + (smoothBeat * Math.PI * 2)) * 15 * beatProgress;
                         const currentRadius = radius + modulation;
 
                         const px = Math.cos(theta) * currentRadius;
@@ -388,6 +398,7 @@
                 ctx.restore();
             }
 
+            lastFrameTime = now;
             requestAnimationFrame(render);
         }
 
