@@ -55,8 +55,16 @@ async def link_event_stream():
         context.term()
 
 
+class AsyncOnly:
+    def __init__(self, ait):
+        self._ait = ait
+
+    def __aiter__(self):
+        return self._ait.__aiter__()
+
+
 async def api_link_stream_view(request):
-    response = StreamingHttpResponse(link_event_stream())
+    response = StreamingHttpResponse(AsyncOnly(link_event_stream()))
     response['Content-Type'] = 'text/event-stream'
     return response
 
