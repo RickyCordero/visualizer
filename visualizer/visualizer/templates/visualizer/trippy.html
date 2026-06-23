@@ -269,7 +269,7 @@
 
             if (syncState) {
                 const now = Date.now() / 1000.0;
-                const elapsed = now - syncState.receivedAt;
+                const elapsed = now - syncState.timestamp;
                 
                 // Extrapolate exact current beat position
                 const bps = syncState.bpm / 60.0;

@@ -186,7 +186,7 @@
                 const now = Date.now() / 1000.0;
                 
                 // Extrapolate the exact elapsed time since the sync event was captured
-                const elapsed = now - syncState.receivedAt;
+                const elapsed = now - syncState.timestamp;
                 
                 // Extrapolate current fractional beat count: beats = beat_start + (bps * elapsed)
                 const beatsPerSecond = syncState.bpm / 60.0;
