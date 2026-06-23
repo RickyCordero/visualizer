@@ -22,6 +22,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("producer")
+# Suppress noisy logs from third-party library edn_format
+logging.getLogger("edn_format").setLevel(logging.WARNING)
 
 SYSTEM_OS = platform.system()
 CARABINER_PORT = 17000
