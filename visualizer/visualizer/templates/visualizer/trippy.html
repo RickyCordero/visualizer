@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trippy Beat Sync Visualizer</title>
+    <!-- Google fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Orbitron:wght@500;900&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #030008;
+            font-family: 'Outfit', sans-serif;
+            color: #ffffff;
+        }
+
+        #visualizer-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Premium Overlay HUD */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 30px;
+            box-sizing: border-box;
+        }
+
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .brand-title {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: 1.5rem;
+            letter-spacing: 4px;
+            background: linear-gradient(45deg, #ff007f, #7f00ff, #00f0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(127, 0, 255, 0.3);
+        }
+
+        .navigation-btn {
+            pointer-events: auto;
+            text-decoration: none;
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .navigation-btn:hover {
+            color: #ffffff;
+            background: rgba(255, 0, 127, 0.2);
+            border-color: rgba(255, 0, 127, 0.6);
+            box-shadow: 0 0 20px rgba(255, 0, 127, 0.4);
+            transform: scale(1.05);
+        }
+
+        .hud-center {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+        }
+
+        .bpm-display {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: 8vh;
+            color: #ffffff;
+            margin: 0;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            transition: transform 0.1s ease-out;
+        }
+
+        .bpm-label {
+            font-size: 1.2rem;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 5px;
+        }
+
+        .hud-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #00ff66;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px #00ff66;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Full-Screen Trippy Canvas -->
+    <canvas id="visualizer-canvas"></canvas>
+
+    <!-- Overlay HUD -->
+    <div class="hud-overlay">
+        <div class="hud-header">
+            <div class="brand-title">KALEIDOSYNC</div>
+            <a href="{% url 'index-view' %}" class="navigation-btn">DIGITAL DISPLAY</a>
+        </div>
+
+        <div class="hud-center">
+            <h1 id="bpm-text" class="bpm-display">---.-</h1>
+            <div class="bpm-label">BPM STREAM</div>
+        </div>
+
+        <div class="hud-footer">
+            <div><span class="status-dot"></span>Ableton Link Active</div>
+            <div>ZeroMQ ZMQ_PORT 5555</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("visualizer-canvas");
+        const ctx = canvas.getContext("2d");
+        const bpmText = document.getElementById("bpm-text");
+
+        // Resize Canvas to fill viewport
+        function resize() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener("resize", resize);
+        resize();
+
+        // Ableton Link Synchronization State
+        let syncState = null;
+
+        // Establish the EventSource stream connection to Django
+        const LINK_URL = `{% url "api-link-view" %}`;
+        const LINK_SOURCE = new EventSource(LINK_URL);
+
+        LINK_SOURCE.onopen = () => {
+            console.log("Ableton Link stream source connected (Trippy page).");
+        };
+
+        LINK_SOURCE.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                syncState = {
+                    bpm: parseFloat(data.bpm),
+                    beat: parseFloat(data.beat),
+                    timestamp: parseFloat(data.timestamp),
+                    receivedAt: Date.now() / 1000.0
+                };
+                bpmText.innerHTML = syncState.bpm.toFixed(1);
+            } catch (err) {
+                const new_bpm = parseFloat(e.data);
+                if (!isNaN(new_bpm)) {
+                    syncState = {
+                        bpm: new_bpm,
+                        beat: 0,
+                        timestamp: Date.now() / 1000.0,
+                        receivedAt: Date.now() / 1000.0
+                    };
+                    bpmText.innerHTML = new_bpm.toFixed(1);
+                }
+            }
+        };
+
+        // Generative Particles class
+        class Particle {
+            constructor(x, y, angle, speed, color, size) {
+                this.x = x;
+                this.y = y;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.color = color;
+                this.alpha = 1.0;
+                this.decay = 0.01 + Math.random() * 0.02;
+                this.size = size;
+            }
+
+            update(beatImpact) {
+                this.x += this.vx * (1.0 + beatImpact * 4.0);
+                this.y += this.vy * (1.0 + beatImpact * 4.0);
+                this.alpha -= this.decay;
+                this.size *= 0.98;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        const particles = [];
+        let rotationAngle = 0;
+        let lastBeatIndex = -1;
+
+        // Visualizer Loop
+        function render() {
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+            const centerX = width / 2;
+            const centerY = height / 2;
+
+            // Trippy Trails effect: Draw a semi-transparent dark rectangle over the screen
+            ctx.fillStyle = "rgba(3, 0, 8, 0.08)";
+            ctx.fillRect(0, 0, width, height);
+
+            if (syncState) {
+                const now = Date.now() / 1000.0;
+                const elapsed = now - syncState.receivedAt;
+                
+                // Extrapolate exact current beat position
+                const bps = syncState.bpm / 60.0;
+                const currentBeat = syncState.beat + (bps * elapsed);
+                const beatProgress = currentBeat % 1.0;
+                const beatIndex = Math.floor(currentBeat);
+
+                // Sharp exponential decay impact curve on every beat (value range 1.0 -> 0.0)
+                const beatImpact = Math.pow(1 - beatProgress, 4);
+
+                // Trigger beat explosions and pulses when beatIndex increases
+                if (beatIndex !== lastBeatIndex) {
+                    lastBeatIndex = beatIndex;
+                    bpmText.style.transform = "scale(1.15)";
+                    setTimeout(() => bpmText.style.transform = "scale(1)", 80);
+
+                    // Spawn a burst of explosion particles on the beat
+                    const numParticles = 40;
+                    const hue = (beatIndex * 45) % 360;
+                    for (let i = 0; i < numParticles; i++) {
+                        const angle = (i / numParticles) * Math.PI * 2 + Math.random() * 0.2;
+                        const speed = 2.0 + Math.random() * 5.0;
+                        const color = `hsl(${hue}, 100%, 65%)`;
+                        const size = 3 + Math.random() * 5;
+                        particles.push(new Particle(centerX, centerY, angle, speed, color, size));
+                    }
+                }
+
+                // Global generative rotation based on beat
+                rotationAngle += 0.005 + (beatImpact * 0.03);
+
+                // Update and draw background explosion particles
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    particles[i].update(beatImpact);
+                    if (particles[i].alpha <= 0 || particles[i].size < 0.2) {
+                        particles.splice(i, 1);
+                    } else {
+                        particles[i].draw(ctx);
+                    }
+                }
+
+                // Render trippy geometric kaleidoscope/mandala
+                const maxRings = 4;
+                const baseHue = (currentBeat * 15) % 360;
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(rotationAngle);
+
+                for (let r = 1; r <= maxRings; r++) {
+                    const radius = r * 50 + (beatImpact * 35 * (maxRings - r));
+                    const numPoints = 6 + (r * 2);
+                    const ringHue = (baseHue + (r * 40)) % 360;
+
+                    ctx.strokeStyle = `hsl(${ringHue}, 100%, 60%)`;
+                    ctx.lineWidth = 1.5 + (beatImpact * 3.5);
+                    ctx.shadowBlur = 5 + (beatImpact * 20);
+                    ctx.shadowColor = `hsl(${ringHue}, 100%, 50%)`;
+
+                    ctx.beginPath();
+                    for (let i = 0; i <= numPoints; i++) {
+                        const theta = (i / numPoints) * Math.PI * 2;
+                        
+                        // Generative spirograph coordinates: modulate radius with sine wave
+                        const modulation = Math.sin(theta * 5 + (currentBeat * Math.PI * 2)) * 15 * beatProgress;
+                        const currentRadius = radius + modulation;
+
+                        const px = Math.cos(theta) * currentRadius;
+                        const py = Math.sin(theta) * currentRadius;
+
+                        if (i === 0) {
+                            ctx.moveTo(px, py);
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    // Draw inner stars / connections
+                    ctx.beginPath();
+                    for (let i = 0; i < numPoints; i++) {
+                        const thetaStart = (i / numPoints) * Math.PI * 2;
+                        const thetaEnd = ((i + Math.floor(numPoints/2)) / numPoints) * Math.PI * 2;
+
+                        const x1 = Math.cos(thetaStart) * (radius * 0.5);
+                        const y1 = Math.sin(thetaStart) * (radius * 0.5);
+                        const x2 = Math.cos(thetaEnd) * (radius * 0.5);
+                        const y2 = Math.sin(thetaEnd) * (radius * 0.5);
+
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                    }
+                    ctx.strokeStyle = `hsla(${ringHue}, 80%, 45%, ${0.1 + beatImpact * 0.4})`;
+                    ctx.stroke();
+                }
+                ctx.restore();
+            } else {
+                // If there's no stream data, draw a slow-pulsing background standby orb
+                const time = Date.now() * 0.002;
+                const radius = 100 + Math.sin(time) * 20;
+                
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                
+                const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+                grad.addColorStop(0, "rgba(127, 0, 255, 0.4)");
+                grad.addColorStop(0.5, "rgba(255, 0, 127, 0.1)");
+                grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+                
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        // Start the visualization
+        requestAnimationFrame(render);
+    </script>
+</body>
+
+</html>

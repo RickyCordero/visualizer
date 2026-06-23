@@ -71,3 +71,7 @@ async def api_link_stream_view(request):
 
 class IndexView(TemplateView):
     template_name = "visualizer/visualizer.html"
+
+
+class TrippyView(TemplateView):
+    template_name = "visualizer/trippy.html"
