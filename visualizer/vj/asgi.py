@@ -8,11 +8,6 @@ https://docs.djangoproject.com/en/3.2/howto/deployment/asgi/
 """
 
 import os
-import sys
-import asyncio
-
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from django.core.asgi import get_asgi_application
 
